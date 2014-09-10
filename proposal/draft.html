@@ -1,0 +1,173 @@
+<h1>Efficient Power of 2 Manipulation</h1>
+
+<ul>
+<li>Document Number: NXXXX</li>
+<li>Date: 2014-08-26</li>
+<li>Programming Language C++, Numerics Working Group</li>
+<li>Reply-to: Matthew Fioravante <a href="&#109;&#x61;&#105;&#108;t&#x6F;:&#x66;&#x6D;&#x61;&#x74;&#x74;&#x68;&#101;&#119;&#x35;&#56;7&#x36;&#64;g&#x6D;&#97;&#105;&#x6C;.&#x63;o&#x6D;">&#x66;&#x6D;&#x61;&#x74;&#x74;&#x68;&#101;&#119;&#x35;&#56;7&#x36;&#64;g&#x6D;&#97;&#105;&#x6C;.&#x63;o&#x6D;</a></li>
+</ul>
+
+<p>The latest draft, reference header, and links to past discussions on github: </p>
+
+<ul>
+<li><a href="https://github.com/fmatthew5876/stdcxx-pow2">https://github.com/fmatthew5876/stdcxx-pow2</a></li>
+</ul>
+
+<h1>Introduction</h1>
+
+<p>This proposal adds support for a set of free functions which allow
+one to efficiently detect and manipulate integral powers of 2.</p>
+
+<p>This proposal was originally a small part of [<a href="#N3864">N3864</a>] but has been broken out.</p>
+
+<h1>Impact on the standard</h1>
+
+<p>This proposal is a pure library extension. 
+It does not require any changes in the core language and
+does not depend on any other library extensions.
+The proposal is composed entirely of free functions. The
+proposed functions are added to the <code>&lt;cmath&gt;</code> header.</p>
+
+<p>This proposal is being written for C++. None of these functions
+are required to be present in <code>&lt;math.h&gt;</code>.</p>
+
+<h1>Motivation and Design</h1>
+
+<h1>Current state of the art</h1>
+
+<h1>Platform specific Optimal Implementations</h1>
+
+<p>Consider the function <code>bool ispow2(int x)</code>.
+Here are 2 possible implementations.</p>
+
+<pre><code>//Return true if x is a power of 2
+bool ispow2(unsigned int x) {
+  return (x &amp; (x-1)) == 0;
+}
+</code></pre>
+
+<!-- -->
+
+<pre><code>//Returns the number of 1 bits in x, using a single instruction
+unsigned int parity(unsigned int x);
+
+//Return true if x is a power of 2
+bool ispow2(unsigned int x) {
+  return parity(x) == 1;
+}
+</code></pre>
+
+<p>As we can see here, if the machine has a <code>parity</code> instruction in it's instruction set[<a href="#N3864">N3864</a>], then the second implementation
+may be more efficient than the first. Core functions like <code>ispow2()</code> with a wide general use case and
+platform specific optimal implementations are a good candidate for standardization.</p>
+
+<h1>Technical Specification</h1>
+
+<p>We will now describe the additions to the <code>&lt;cmath&gt;</code> header. This is a procedural library implemented
+entirely using templated and overloaded free functions.
+Each function is <code>constexpr</code> and <code>noexcept</code>. Unless otherwise noted, each pre-condition violation results in undefined behavior.
+Each pre-condition has
+either undefined or implementation defines results and each case is documented below.</p>
+
+<h2>Concepts</h2>
+
+<ul>
+<li><code>std::is_integral&lt;integral&gt;::value == true</code></li>
+</ul>
+
+<h2>Specification</h2>
+
+<pre><code>template &lt;typename integral&gt;
+  constexpr bool ispow2(intergal x) noexcept;
+
+template &lt;typename integral&gt;
+  constexpr integral ceilp2(integral x) noexcept;
+
+template &lt;typename integral&gt;
+  constexpr integral floorp2(integral x) noexcept;
+</code></pre>
+
+<h2>Shared Pre-Conditions</h2>
+
+<p>The result is undefined if any of:</p>
+
+<ul>
+<li><code>a == 0</code></li>
+<li><code>a</code> is not a power of 2</li>
+<li><code>x &lt; 0</code></li>
+</ul>
+
+<h3>Example Implementations</h3>
+
+<p>All of these implementations are trivial, efficient, and portable.</p>
+
+<pre><code>template &lt;typename Integral&gt;
+  constexpr bool ispow2(Integral x) noexcept {
+    return x &gt; 0 &amp;&amp; (x &amp; (x-1)) == 0;
+    //return popcount(x) == 1;
+  }
+
+//Round up to the next power of 2
+//Application: Growable containers whose size must be a power of 2
+//Application: Extending a 2d image size to a power of 2 for 3d graphics libraries (OpenGL/DirectX)
+template &lt;typename Integral&gt;
+constexpr14 Integral ceilp2(Integral x) noexcept {
+  x = x-1;
+  x |= x &lt;&lt; 1;
+  x |= x &lt;&lt; 2;
+  x |= x &lt;&lt; 4;
+  if(sizeof(x) &gt; 1) {
+    x |= x &lt;&lt; 8;
+    if(sizeof(x) &gt; 2) {
+      x |= x &lt;&lt; 16;
+      if(sizeof(x) &gt; 4) {
+        x |= x &lt;&lt; 32;
+      }
+    }
+  }
+  return x + 1;
+}
+
+//Round down to the previous power of 2
+//Application: See ceilp2
+template &lt;typename Integral&gt;
+constexpr14 Integral floorp2(Integral x) noexcept {
+  x |= shlr(x, 1);
+  x |= shlr(x, 2);
+  x |= shlr(x, 4);
+  if(sizeof(x) &gt; 1) {
+    x |= shlr(x, 8);
+    if(sizeof(x) &gt; 2) {
+      x |= shlr(x, 16);
+      if(sizeof(x) &gt; 4) {
+        x |= shlr(x, 32);
+      }
+    }
+  }
+  return x - shlr(x, 1);
+}
+</code></pre>
+
+<p>NOTE: Implementations should support all extended integral types.</p>
+
+<h1>Use Cases</h1>
+
+<ul>
+<li>Binary arithmetic</li>
+<li>Power of 2 sized data structures
+<ul>
+<li>Efficient array based queues (circular queue)</li>
+</ul></li>
+<li>Scaling aritrary image dimensions to the next power of 2 for texturing in 3d grpahics API's such as OpenGL.</li>
+</ul>
+
+<h1>Acknowledgments</h1>
+
+<p>Thank you to everyone who has been credited by N3864 for also helping with this proposal.
+Special thanks to everyone on the std-proposals forum for their valuable insight and feedback.</p>
+
+<h1>References</h1>
+
+<ul>
+<li><a name="N3864"></a>[N3864] Fioravante, Matthew <em>N3864 - A constexpr bitwise operations library for C++</em>, Available online at <a href="https://github.com/fmatthew5876/stdcxx-bitops">https://github.com/fmatthew5876/stdcxx-bitops</a></li>
+</ul>
